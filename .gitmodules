@@ -1,0 +1,9 @@
+[submodule "stot-receiver"]
+	path = stot-receiver
+	url = https://github.com/intel-innersource/applications.design-automation.stot.receiver.git
+[submodule "reference-probe-plugin"]
+	path = reference-probe-plugin
+	url = https://github.com/intel-innersource/applications.debuggers.debug-foundation.openipc.reference-probe-plugin.git
+[submodule "stot-plugin"]
+	path = stot-plugin
+	url = https://github.com/intel-innersource/applications.design-automation.stot.plugin.git
