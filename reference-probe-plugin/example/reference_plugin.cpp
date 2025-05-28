@@ -455,7 +455,7 @@ class ReferenceJtagInterface
 
     std::vector<uint8_t> _idcodeIrValue { 0x2 };
     ShiftRegister _irRegister { 8, { 0x2 } };
-    ShiftRegister _idcodeRegister { 32, { 0x79, 0x56, 0x34, 0x12 } }; // idcode = 0x12345679
+    ShiftRegister _idcodeRegister { 32, { } }; // idcode = 0x12345679
     ShiftRegister _bypassRegister { 1, { 0 } };
 
 public:
@@ -463,8 +463,9 @@ public:
     PPI_RefId InterfaceRefId;
     OpenIPC_DeviceId InterfaceDeviceId { OpenIPC_INVALID_DEVICE_ID };
 
-    explicit ReferenceJtagInterface(PPI_RefId interfaceRefId) :
-        InterfaceRefId(interfaceRefId)
+    explicit ReferenceJtagInterface(PPI_RefId interfaceRefId, std::vector<uint8_t> idcodeValue) :
+        InterfaceRefId(interfaceRefId),
+        _idcodeRegister(32, idcodeValue)
     {
 
     }
@@ -584,6 +585,7 @@ private:
         {
             auto idcodeRegisterCopy = _idcodeRegister; // copying so we don't write to the readonly register
             auto output = idcodeRegisterCopy.Shift(op.InBits, op.BitCount);
+            //std::vector<uint8_t> output = { 0xde, 0xad, 0xbe, 0xef };
             assert((op.BitCount + 7) / 8 == output.size());
             if (op.OutBits)
             {
@@ -882,9 +884,7 @@ class ReferenceProbe
 {
     bool _isInitializing { false };
     bool _isInitialized { false };
-    ReferenceJtagInterface _jtagInterface;
-    ReferenceStatePortInterface _statePortInterface;
-    ReferenceTraceInterface _traceInterface;
+    std::vector<ReferenceJtagInterface> _jtagInterfaces;
 public:
     ConfigHolder Configs { { "RuntimeSetting"sv, "Default" } };
     static const PPI_char* const PROBE_TYPE;
@@ -892,12 +892,11 @@ public:
     OpenIPC_DeviceId ProbeDeviceId { OpenIPC_INVALID_DEVICE_ID };
 
     explicit ReferenceProbe(PPI_RefId probeRefId) :
-        _jtagInterface(42),
-        _statePortInterface(43),
-        _traceInterface(44),
+        //_jtagInterface(42, std::vector<uint8_t> { 0x78, 0x56, 0x34, 0x12 }),
         ProbeRefId(probeRefId)
     {
-
+        _addJtagInterface();
+        _addJtagInterface();
     }
 
     ~ReferenceProbe() = default;
@@ -940,81 +939,113 @@ public:
     {
         PPI_ProbeInfo info{};
         CopyStringToArray(info.type,             ReferenceProbe::PROBE_TYPE);
-        CopyStringToArray(info.uniqueIdentifier, "example.0");
+        CopyStringToArray(info.uniqueIdentifier, "SVE.0");
         CopyStringToArray(info.probeInfo,        "Reference version 1.0");
         return info;
     }
 
     std::vector<PPI_RefId> InterfaceGetRefIds() const noexcept
     {
-        std::vector<PPI_RefId> interfaceRefIds {
+        /*std::vector<PPI_RefId> interfaceRefIds{
             _jtagInterface.InterfaceRefId,
-            _statePortInterface.InterfaceRefId,
-            _traceInterface.InterfaceRefId
         };
+        return interfaceRefIds;*/
+        std::vector<PPI_RefId> interfaceRefIds;
+        interfaceRefIds.reserve(_jtagInterfaces.size());
+        for (const auto& jtag : _jtagInterfaces)
+        {
+            interfaceRefIds.push_back(jtag.InterfaceRefId);
+        }
         return interfaceRefIds;
     }
 
     MaybeReferenceInterfaceRef GetInterfaceByRefId(PPI_RefId interfaceRefId)
     {
-        if (_jtagInterface.InterfaceRefId == interfaceRefId)
+        /*if (_jtagInterface.InterfaceRefId == interfaceRefId)
         {
             return std::ref(_jtagInterface);
         }
-        if (_statePortInterface.InterfaceRefId == interfaceRefId)
+        return std::monostate();*/
+
+        const auto interfaceIter = std::find_if(_jtagInterfaces.begin(), _jtagInterfaces.end(),
+                                            [interfaceRefId](const ReferenceJtagInterface& jtag)
+                                            {
+                                                return jtag.InterfaceRefId == interfaceRefId;
+                                            });
+        if (interfaceIter == _jtagInterfaces.end())
         {
-            return std::ref(_statePortInterface);
+            return std::monostate();
         }
-        if (_traceInterface.InterfaceRefId == interfaceRefId)
-        {
-            return std::ref(_traceInterface);
-        }
-        return std::monostate();
+        return *interfaceIter;
     }
 
     MaybeReferenceInterfaceRef GetInterfaceByDeviceId(OpenIPC_DeviceId interfaceDeviceId)
     {
-        if (_jtagInterface.InterfaceDeviceId == interfaceDeviceId)
+        /*if (_jtagInterface.InterfaceDeviceId == interfaceDeviceId)
         {
             return std::ref(_jtagInterface);
         }
-        if (_statePortInterface.InterfaceDeviceId == interfaceDeviceId)
+        return std::monostate();*/
+
+        const auto interfaceIter = std::find_if(_jtagInterfaces.begin(), _jtagInterfaces.end(),
+            [interfaceDeviceId](const ReferenceJtagInterface& jtag)
+            {
+                return jtag.InterfaceDeviceId == interfaceDeviceId;
+            });
+        if (interfaceIter == _jtagInterfaces.end())
         {
-            return std::ref(_statePortInterface);
+            return std::monostate();
         }
-        if (_traceInterface.InterfaceDeviceId == interfaceDeviceId)
-        {
-            return std::ref(_traceInterface);
-        }
-        return std::monostate();
+        return *interfaceIter;
+    }
+private:
+    uint32_t _getNextInterfaceRefId() const noexcept
+    {
+        static uint32_t lastInterfaceIndex = 42;
+        const uint32_t  newInterfaceRefId = lastInterfaceIndex;
+        lastInterfaceIndex++;
+        return newInterfaceRefId;
+    }
+
+    std::vector<uint8_t> _getNextIdcodeValue() const noexcept
+    {
+        static uint8_t lastIdcodeIndex = 0;
+        const std::vector<uint8_t> newIdcodeValue = { lastIdcodeIndex, 0x56, 0x34, 0x12 };
+        lastIdcodeIndex++;
+        return newIdcodeValue;
+    }
+
+    void _addJtagInterface() noexcept
+    {
+        _jtagInterfaces.emplace_back(_getNextInterfaceRefId(), _getNextIdcodeValue());
     }
 
 };
-const PPI_char* const ReferenceProbe::PROBE_TYPE = "Reference_FakeProbe";
+const PPI_char* const ReferenceProbe::PROBE_TYPE = "SVEProbe";
 
 // ==== Plugin ====
-class ReferencePlugin
+class SVEPlugin
 {
     PPI_RefId _pluginId;
     static inline const std::vector<const PPI_char*> _probeTypes {ReferenceProbe::PROBE_TYPE};
     std::vector<ReferenceProbe> _probes;
 public:
     // Plugin level configs should be minimized to avoid polluting the root config scope.
-    ConfigHolder Configs { { "ReferencePlugin.Setting"sv, "Value" } };
+    ConfigHolder Configs { { "SVEPlugin.Setting"sv, "Value" } };
 
     static void PluginGetInfo(PPI_PluginApiVersion clientInterfaceVersion, PPI_PluginInfo& info) noexcept
     {
         info.clientInterfaceSupported  = clientInterfaceVersion == PPI_PLUGIN_API_VERSION;
         info.pluginInterfaceVersion    = PPI_PLUGIN_API_VERSION;
         info.requiresLockNotifications = 1;
-        constexpr char pluginName[] = "ReferencePlugin";
+        constexpr char pluginName[] = "SVEPlugin";
         static_assert(sizeof(pluginName) <= PPI_MAX_INFO_LEN,     "Name should fit in PPI_PluginInfo");
         static_assert(pluginName[sizeof(pluginName) - 1] == '\0', "Name should end with null");
 
         CopyStringToArray(info.pluginName, pluginName);
     }
 
-    explicit ReferencePlugin(PPI_RefId pluginId) :
+    explicit SVEPlugin(PPI_RefId pluginId) :
         _pluginId(pluginId)
     {
         _addFakeProbe(); // Adding an initial probe, as though we discovered one
@@ -1125,21 +1156,21 @@ private:
     }
 
 };
-static std::unique_ptr<ReferencePlugin> EXAMPLE_PLUGIN_INSTANCE;
+static std::unique_ptr<SVEPlugin> EXAMPLE_PLUGIN_INSTANCE;
 
 // ==== PPI Implementation ====
 OpenIPC_Error PPI_PluginGetInfo(PPI_PluginApiVersion clientInterfaceVersion, PPI_PluginInfo* info)
 {
     // This may be called before the plugin is initialized
     assert(info != nullptr);
-    ReferencePlugin::PluginGetInfo(clientInterfaceVersion, *info);
+    SVEPlugin::PluginGetInfo(clientInterfaceVersion, *info);
     return OpenIPC_Error_No_Error;
 }
 
 OpenIPC_Error PPI_PluginInitialize(PPI_RefId pluginId, const PPI_char* vendorinit)
 {
     (void)vendorinit; // We do not use XML for initialization. Dynamic Initialization is preferred.
-    EXAMPLE_PLUGIN_INSTANCE.reset(new ReferencePlugin(pluginId));
+    EXAMPLE_PLUGIN_INSTANCE.reset(new SVEPlugin(pluginId));
 
     return OpenIPC_Error_No_Error;
 }
@@ -1158,7 +1189,7 @@ OpenIPC_Error PPI_PluginGetCapabilities(PPI_PluginCapabilities* capabilities)
 {
     // This may be called before the Plugin is Initialized
     assert(capabilities != nullptr);
-    ReferencePlugin::PluginGetCapabilities(*capabilities);
+    SVEPlugin::PluginGetCapabilities(*capabilities);
 
     return OpenIPC_Error_No_Error;
 }
@@ -1895,7 +1926,7 @@ OpenIPC_Error PPI_PluginUsesLoggerStream(PPI_Stream stream, PPI_bool* usesLogger
 
 // ==== Device Configs ====
 
-using ReferenceDevice = std::variant<std::monostate, std::reference_wrapper<ReferencePlugin>, std::reference_wrapper<ReferenceProbe>,
+using ReferenceDevice = std::variant<std::monostate, std::reference_wrapper<SVEPlugin>, std::reference_wrapper<ReferenceProbe>,
                                      std::reference_wrapper<ReferenceJtagInterface>, std::reference_wrapper<ReferenceStatePortInterface>, std::reference_wrapper<ReferenceTraceInterface>>;
 
 ReferenceDevice GetDevice(OpenIPC_DeviceId deviceID)
@@ -2001,7 +2032,7 @@ OpenIPC_Error PPI_PluginGetProbeTypes(uint32_t maxProbeTypes, PPI_char const** p
         maxProbeTypes = 0;
     }
 
-    const auto& pluginProbeTypes = ReferencePlugin::PluginGetProbeTypes();
+    const auto& pluginProbeTypes = SVEPlugin::PluginGetProbeTypes();
     *probeTypeCount = static_cast<uint32_t>(pluginProbeTypes.size());
     const uint32_t copyCount = std::min(*probeTypeCount, maxProbeTypes);
     for (uint32_t i = 0; i < copyCount; i++)
