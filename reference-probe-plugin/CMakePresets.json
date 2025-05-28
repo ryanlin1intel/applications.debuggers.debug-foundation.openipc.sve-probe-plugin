@@ -1,0 +1,200 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "vs",
+      "displayName": "Visual Studio Config",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "binaryDir": "${sourceDir}/out/build/${presetName}"
+    },
+    {
+      "name": "vsclang",
+      "displayName": "Visual Studio Clang Config",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "ClangCL",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/out/build/${presetName}"
+    },
+    {
+      "name": "gcc-debug",
+      "displayName": "GCC Debug Config",
+      "generator": "Ninja",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs-release",
+      "configurePreset": "vs",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs-debug",
+      "configurePreset": "vs",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vsclang",
+      "configurePreset": "vsclang",
+      "configuration": "Release"
+    },
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug",
+      "configuration": "Debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "vs-release",
+      "configurePreset": "vs",
+      "configuration": "release",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    },
+    {
+      "name": "vs-debug",
+      "configurePreset": "vs",
+      "configuration": "debug",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    },
+    {
+      "name": "vsclang",
+      "configurePreset": "vsclang",
+      "configuration": "release",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    },
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug",
+      "configuration": "debug",
+      "output": { "outputOnFailure": true },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": true
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "vs"
+        },
+        {
+          "type": "build",
+          "name": "vs-release"
+        },
+        {
+          "type": "test",
+          "name": "vs-release"
+        }
+      ]
+    },
+    {
+      "name": "vs-release",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "vs"
+        },
+        {
+          "type": "build",
+          "name": "vs-release"
+        },
+        {
+          "type": "test",
+          "name": "vs-release"
+        }
+      ]
+    },
+    {
+      "name": "vs-debug",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "vs"
+        },
+        {
+          "type": "build",
+          "name": "vs-debug"
+        },
+        {
+          "type": "test",
+          "name": "vs-debug"
+        }
+      ]
+    },
+    {
+      "name": "vsclang",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "vsclang"
+        },
+        {
+          "type": "build",
+          "name": "vsclang"
+        },
+        {
+          "type": "test",
+          "name": "vsclang"
+        }
+      ]
+    },
+    {
+      "name": "gcc-debug",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-debug"
+        },
+        {
+          "type": "build",
+          "name": "gcc-debug"
+        },
+        {
+          "type": "test",
+          "name": "gcc-debug"
+        }
+      ]
+    }
+  ]
+}
