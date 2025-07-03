@@ -42,6 +42,21 @@
 #include <atomic>
 #include <unordered_map>
 
+// socket libs
+#include <cstdlib>
+#include <iostream>
+#include <fstream>
+#include <winsock2.h>
+#include <sstream>
+#include <chrono>
+
+#undef max
+#undef min
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
+#pragma comment(lib, "ws2_32.lib")
+#pragma warning(disable:4996) 
+
 using namespace std::literals::string_view_literals;
 
 namespace
@@ -891,6 +906,10 @@ public:
     PPI_RefId ProbeRefId;
     OpenIPC_DeviceId ProbeDeviceId { OpenIPC_INVALID_DEVICE_ID };
 
+    WSADATA wsaData;
+    SOCKET sock;
+    sockaddr_in serverAddr{};
+
     explicit ReferenceProbe(PPI_RefId probeRefId) :
         //_jtagInterface(42, std::vector<uint8_t> { 0x78, 0x56, 0x34, 0x12 }),
         ProbeRefId(probeRefId)
@@ -917,11 +936,73 @@ public:
         }
         ProbeDeviceId   = probeDeviceId;
         _isInitializing = true;
+
+        // additional information
+        // STARTUPINFO si;
+        // PROCESS_INFORMATION pi;
+
+        // set the size of the structures
+        /*ZeroMemory(&si, sizeof(si));
+        si.cb = sizeof(si);
+        ZeroMemory(&pi, sizeof(pi));
+
+        CreateProcess("C:\\workspace\\Source\\Repos\\sve-probe-plugin\\reference-probe-plugin\\out\\build\\vs\\x64\\Debug\\receiver.exe",
+            "",        // Command line
+            NULL,           // Process handle not inheritable
+            NULL,           // Thread handle not inheritable
+            FALSE,          // Set handle inheritance to FALSE
+            0,              // No creation flags
+            NULL,           // Use parent's environment block
+            NULL,           // Use parent's starting directory
+            &si,            // Pointer to STARTUPINFO structure
+            &pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
+        );
+        // Close process and thread handles.
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);*/
+
+        WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+        sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+        if (sock == INVALID_SOCKET) {
+            PLUGIN_LOGGER.Log(ProbeDeviceId, PPI_errorNotification, "Socket creation failed.\n");
+            return 1;
+        }
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(12345);  // Make sure this matches the receiver
+        serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");  // Replace with actual IP of receiver
+
+        if (connect(sock, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+            PLUGIN_LOGGER.Log(ProbeDeviceId, PPI_errorNotification, "Connection failed.\n");
+            closesocket(sock);
+            WSACleanup();
+            return 1;
+        }
+
         return OpenIPC_Error_No_Error;
     }
 
     OpenIPC_Error FinishInitialization() noexcept
     {
+        // const char* message = "get";  // Hardcoded message instead of argv
+        char buffer[1024];
+
+        std::string payload = "test-message";
+        std::string request_id = getCurrentEpochMillisUTC(); 
+        std::string xml = buildXMLRequest(request_id, payload);
+        send(sock, xml.c_str(), (int)xml.size(), 0);
+
+        int bytesReceived = recv(sock, buffer, sizeof(buffer) - 1, 0);
+        if (bytesReceived > 0) {
+            buffer[bytesReceived] = '\0';
+
+            PLUGIN_LOGGER.Log(ProbeDeviceId, PPI_infoNotification, buffer);
+        }
+        else {
+            PLUGIN_LOGGER.Log(ProbeDeviceId, PPI_infoNotification, "No response received.\n");
+        }
+        
         if (!_isInitializing)
         {
             return OpenIPC_Error_Not_Initializing;
@@ -998,6 +1079,22 @@ public:
         }
         return *interfaceIter;
     }
+
+    std::string getCurrentEpochMillisUTC() {
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        return std::to_string(ms);
+    }
+
+    std::string buildXMLRequest(const std::string& request_id, const std::string& payload) {
+        std::ostringstream oss;
+        oss << "<request>"
+            << "<request_id>" << request_id << "</request_id>"
+            << "<payload>" << payload << "</payload>"
+            << "</request>";
+        return oss.str();
+    }
+
 private:
     uint32_t _getNextInterfaceRefId() const noexcept
     {
@@ -1244,12 +1341,18 @@ OpenIPC_Error PPI_ProbeFinishInitialization(OpenIPC_DeviceId probeID)
     {
         return OpenIPC_Error_Invalid_Device_ID;
     }
+
     return probe->FinishInitialization();
 }
 
 OpenIPC_Error PPI_ProbeDeInitialize(OpenIPC_DeviceId probeID)
 {
+
     assert(EXAMPLE_PLUGIN_INSTANCE != nullptr);
+    const auto probe = EXAMPLE_PLUGIN_INSTANCE->GetProbeByDeviceId(probeID);
+
+    closesocket(probe->sock);
+    WSACleanup();
     return EXAMPLE_PLUGIN_INSTANCE->RemoveProbeByDeviceId(probeID);
 }
 
