@@ -22,21 +22,16 @@
 /////////////////////////<Source Code Embedded Notices>/////////////////////////
 //by martin.monroy@intel.com
 
-#ifndef RECEIVER_H
-#define RECEIVER_H
+#ifndef UTILS_H
+#define UTILS_H
 
-#include <winsock2.h>
-#include <windows.h>
-#include <fstream>
 #include <vector>
-#include <comdef.h>
-#include <msxml6.h>
+#include <sstream>   // std::stringstream, std::getline
+#include <iomanip>   // std::hex, std::setw, std::setfill, std::uppercase
 
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "msxml6.lib")
-
-std::string extractXMLElement(IXMLDOMDocument* doc, const std::wstring& tag);
-std::string buildXMLResponseInit(const std::string& request_id);
-std::string buildXMLResponseShift(const std::string& request_id, const std::vector<std::uint8_t>& shiftOutput);
+std::string bytes_to_hex_list(const std::vector<std::uint8_t>& bytes);
+static inline void trim_inplace(std::string& s);
+bool parse_byte_vector(const std::string& input,std::vector<std::uint8_t>& out,std::string& error);
+bool to_size_t_stoul(const std::string& s, size_t& out);
 
 #endif

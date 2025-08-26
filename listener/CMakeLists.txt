@@ -9,6 +9,8 @@ project(receiver LANGUAGES CXX)
 # App target
 add_executable(receiver
     src/receiver.cpp
+    src/shift.cpp
+    src/utils.cpp
 )
 
 # Public headers live in include/

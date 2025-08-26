@@ -21,22 +21,21 @@
 //
 /////////////////////////<Source Code Embedded Notices>/////////////////////////
 //by martin.monroy@intel.com
+//shift operation code header file. 
 
-#ifndef RECEIVER_H
-#define RECEIVER_H
+#ifndef SHIFT_H
+#define SHIFT_H
 
-#include <winsock2.h>
-#include <windows.h>
-#include <fstream>
+#include <iostream>
 #include <vector>
-#include <comdef.h>
-#include <msxml6.h>
+#include <cassert>
 
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "msxml6.lib")
+//set globals used by shift
+void set_value(std::vector<uint8_t> value);
+void set_size(size_t size);
 
-std::string extractXMLElement(IXMLDOMDocument* doc, const std::wstring& tag);
-std::string buildXMLResponseInit(const std::string& request_id);
-std::string buildXMLResponseShift(const std::string& request_id, const std::vector<std::uint8_t>& shiftOutput);
+void SetNthBit(std::vector<uint8_t>& vec, size_t n, bool value);
+bool GetNthBit(const std::vector<uint8_t>& vec, size_t n);
+std::vector<uint8_t> Shift(const std::vector<uint8_t>& input, size_t bitSize);
 
 #endif
